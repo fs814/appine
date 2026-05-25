@@ -79,7 +79,31 @@ void appine_setup_webview_plugins(WKWebViewConfiguration *config) {
     [config.userContentController addScriptMessageHandler:handler name:@"appineLog"];
     [config.userContentController addScriptMessageHandler:handler name:@"appineSaveData"];
 
-    // 3. 注入基础的 console.log 劫持和错误捕获
+    // 3. 注入 requestIdleCallback polyfill
+    NSString *polyfillJS = @"\
+        if (!window.requestIdleCallback) {\
+            window.requestIdleCallback = function(callback, options) {\
+                const start = Date.now();\
+                return setTimeout(function() {\
+                    callback({\
+                        didTimeout: false,\
+                        timeRemaining: function() {\
+                            return Math.max(0, 50 - (Date.now() - start));\
+                        }\
+                    });\
+                }, 1);\
+            };\
+        }\
+        if (!window.cancelIdleCallback) {\
+            window.cancelIdleCallback = function(id) {\
+                clearTimeout(id);\
+            };\
+        }\
+    ";
+    WKUserScript *polyfillScript = [[WKUserScript alloc] initWithSource:polyfillJS injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES];
+    [config.userContentController addUserScript:polyfillScript];
+
+    // 4. 注入基础的 console.log 劫持和错误捕获
     NSString *debugJS = @"\
         const origLog = console.log;\n\
         console.log = function(...args) {\n\
