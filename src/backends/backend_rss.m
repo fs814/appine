@@ -161,7 +161,7 @@ static NSString *g_rss_work_path = nil; // 全局工作目录
     NSString *dbPath = [dir stringByAppendingPathComponent:@"rss.sqlite"];
     APPINE_LOG(@"[Appine RSS] 📂 数据库路径: %@", dbPath);
 
-    if (sqlite3_open([dbPath UTF8String], &_db) == SQLITE_OK) {
+    if (sqlite3_open_v2([dbPath UTF8String], &_db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, NULL) == SQLITE_OK) {
         APPINE_LOG(@"[Appine RSS] ✅ 数据库打开成功");
         [self createTables];
     } else {

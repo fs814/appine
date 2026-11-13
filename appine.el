@@ -704,6 +704,32 @@ containing multiple elfeed.org format files."
       (when win (select-window win)))
     (appine--set-active t)))
 
+(defun appine--open-metal-demo (demo)
+  "Open the Metal sample DEMO (\"triangle\" or \"raytracing\") in a new tab."
+  (pcase-let* ((`(,x ,y ,w ,h) (appine--rect)))
+    (appine-native-open-metal-in-rect demo x y w h)
+    (let ((win (appine--get-active-window-for-buffer appine--buffer-name)))
+      (when win (select-window win)))
+    (appine--set-active t)))
+
+(defun appine-metal-triangle ()
+  "Open a Metal view that draws a colorful, rotating triangle in a new tab.
+This is Apple's \"Drawing a triangle with Metal 4\" sample (see
+src/backends/metal/triangle/): the Metal 4 renderer on GPUs in the Metal 4
+family (Apple silicon, macOS 26 or later), the classic Metal renderer
+otherwise."
+  (interactive)
+  (appine--open-metal-demo "triangle"))
+
+(defun appine-metal-raytracing ()
+  "Open a Metal view that path traces a Cornell box in a new tab.
+This is Apple's \"Accelerating ray tracing using Metal\" sample (see
+src/backends/metal/raytracing/). It needs a GPU with Metal ray tracing and
+Metal 3 support; otherwise the tab says why it cannot run. The image starts
+noisy and converges as frames accumulate; resizing restarts it."
+  (interactive)
+  (appine--open-metal-demo "raytracing"))
+
 (defun appine-close ()
   "Close all embedded native views and delete host window when possible."
   (interactive)

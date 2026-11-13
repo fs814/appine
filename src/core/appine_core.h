@@ -31,6 +31,7 @@ extern "C" {
 int appine_core_open_web_in_rect(const char *url, int x, int y, int width, int height);
 int appine_core_open_file_in_rect(const char *path, int x, int y, int width, int height);
 int appine_core_open_rss_in_rect(const char *path, int x, int y, int w, int h);
+int appine_core_open_metal_in_rect(const char *demo, int x, int y, int w, int h);
   
 int appine_core_move_resize(int x, int y, int width, int height);
 int appine_core_close(void);

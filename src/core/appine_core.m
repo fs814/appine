@@ -53,6 +53,22 @@ extern id<AppineBackend> appine_create_web_backend(NSString *urlString);
 extern id<AppineBackend> appine_create_pdf_backend(NSString *path);
 extern id<AppineBackend> appine_create_quicklook_backend(NSString *path);
 extern id<AppineBackend> appine_create_rss_backend(NSString *path);
+extern id<AppineBackend> appine_create_metal_triangle_backend(void);
+extern id<AppineBackend> appine_create_metal_raytracing_backend(void);
+
+// Metal sample tabs open no file. Their tab path, "appine:metal-<demo>",
+// names the demo and is what the session saves and restores.
+static NSString *appine_metal_demo_path(NSString *demo) {
+    return [@"appine:metal-" stringByAppendingString:demo];
+}
+
+static id<AppineBackend> appine_create_metal_backend_for_path(NSString *path) {
+    if ([path isEqualToString:appine_metal_demo_path(@"triangle")])
+        return appine_create_metal_triangle_backend();
+    if ([path isEqualToString:appine_metal_demo_path(@"raytracing")])
+        return appine_create_metal_raytracing_backend();
+    return nil;
+}
 
 static id<AppineBackend> appine_create_backend_for_file(NSString *path) {
     // 智能判断使用appine_create_quicklook_backend, appine_create_pdf_backend
@@ -975,6 +991,7 @@ static void appine_save_session(void) {
             else if (tab.backend.kind == AppineBackendKindPDF) kindStr = @"pdf";
             else if (tab.backend.kind == AppineBackendKindQuickLook) kindStr = @"quicklook";
             else if (tab.backend.kind == AppineBackendKindRss) kindStr = @"rss";
+            else if (tab.backend.kind == AppineBackendKindMetal) kindStr = @"metal";
 
             [tabsData addObject:@{@"path": pathToSave, @"kind": kindStr}];
         }
@@ -1009,6 +1026,8 @@ static void appine_restore_session_if_needed(void) {
 
             if ([kind isEqualToString:@"rss"]) {
                 backend = appine_create_rss_backend(pathForBackend);
+            } else if ([kind isEqualToString:@"metal"]) {
+                backend = appine_create_metal_backend_for_path(savedPath);
             } else if ([kind isEqualToString:@"quicklook"]) {
                 backend = appine_create_quicklook_backend(pathForBackend);
             } else if ([kind isEqualToString:@"web"]) {
@@ -1509,6 +1528,25 @@ int appine_core_open_rss_in_rect(const char *path, int x, int y, int w, int h) {
           appine_add_tab(backend, nsPath);
           appine_restore_focus_if_active();
         }
+    });
+    return 0;
+}
+
+// ===========================================================================
+// metal sample api (demo: "triangle" or "raytracing")
+// ===========================================================================
+int appine_core_open_metal_in_rect(const char *demo, int x, int y, int w, int h) {
+    NSString *path = appine_metal_demo_path(demo ? [NSString stringWithUTF8String:demo] : @"");
+    dispatch_async(dispatch_get_main_queue(), ^{
+        id<AppineBackend> backend = appine_create_metal_backend_for_path(path);
+        if (!backend) {
+            NSLog(@"[appine] Unknown Metal demo: %@", path);
+            return;
+        }
+        appine_state().targetRect = NSMakeRect(x, y, w, h);
+        appine_ensure_container();
+        appine_add_tab(backend, path);
+        appine_restore_focus_if_active();
     });
     return 0;
 }

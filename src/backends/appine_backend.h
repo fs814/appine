@@ -31,6 +31,7 @@ typedef NS_ENUM(NSInteger, AppineBackendKind) {
     AppineBackendKindPDF,
     AppineBackendKindQuickLook,
     AppineBackendKindRss,
+    AppineBackendKindMetal,   // Metal sample demos (src/backends/metal/)
 };
 
 static inline NSBox *appine_create_color_box(NSRect frame, NSColor *fillColor, NSAutoresizingMaskOptions mask) {
