@@ -6,6 +6,7 @@ Two of Apple's Metal samples, running in appine tabs inside Emacs:
 |---|---|---|
 | `M-x appine-metal-triangle` | `triangle/` | [Drawing a triangle with Metal 4](https://developer.apple.com/documentation/metal/drawing-a-triangle-with-metal-4) |
 | `M-x appine-metal-raytracing` | `raytracing/` | [Accelerating ray tracing using Metal](https://developer.apple.com/documentation/metal/accelerating-ray-tracing-using-metal) |
+| `M-x appine-shadertoy` | `shadertoy/` | Not an Apple sample: Shadertoy shaders, translated from GLSL to Metal at runtime |
 
 Each directory holds that sample's renderer code, its license, and a README
 listing what changed. The hosts are `../backend_metal_triangle.m` and

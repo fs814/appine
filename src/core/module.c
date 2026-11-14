@@ -119,6 +119,23 @@ static emacs_value Fappine_open_metal_in_rect(emacs_env *env, ptrdiff_t nargs, e
     return env->intern(env, "t");
 }
 
+static emacs_value Fappine_open_shadertoy_in_rect(emacs_env *env, ptrdiff_t nargs, emacs_value *args, void *data) {
+    char *source = copy_emacs_string(env, args[0]);
+    if (!source) return env->intern(env, "nil");
+    /* nil key: copy_emacs_string fails on a non-string and returns NULL. */
+    char *key = env->is_not_nil(env, args[1]) ? copy_emacs_string(env, args[1]) : NULL;
+
+    int x = get_emacs_int(env, args[2]);
+    int y = get_emacs_int(env, args[3]);
+    int w = get_emacs_int(env, args[4]);
+    int h = get_emacs_int(env, args[5]);
+
+    appine_core_open_shadertoy_in_rect(source, key, x, y, w, h);
+    free(source);
+    free(key);
+    return env->intern(env, "t");
+}
+
 static emacs_value Fappine_move_resize(emacs_env *env, ptrdiff_t nargs, emacs_value *args, void *data) {
     int x = get_emacs_int(env, args[0]);
     int y = get_emacs_int(env, args[1]);
@@ -177,6 +194,8 @@ int emacs_module_init(struct emacs_runtime *runtime) {
                   "open rss");
     bind_function(env, "appine-native-open-metal-in-rect", 5, 5, Fappine_open_metal_in_rect,
                   "Open a Metal sample demo (\"triangle\" or \"raytracing\") in embedded rect as a new tab.");
+    bind_function(env, "appine-native-open-shadertoy-in-rect", 6, 6, Fappine_open_shadertoy_in_rect,
+                  "Open a Shadertoy shader (file, link or ID; then the API key or nil) in embedded rect as a new tab.");
     bind_function(env, "appine-native-move-resize", 4, 4, Fappine_move_resize,
                   "Move/resize embedded native view.");
 

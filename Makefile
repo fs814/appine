@@ -48,6 +48,20 @@ SRC_METAL_DIR = $(SRC_BACKEND_DIR)/metal
 GEN_DIR       = build
 OBJ_DIR       = $(GEN_DIR)/obj
 METAL_DEMOS   = triangle raytracing
+
+# Shadertoy (src/backends/metal/shadertoy): GLSL is translated to Metal with
+# shaderc and SPIRV-Cross from the LunarG Vulkan SDK, linked statically so the
+# module needs no SDK at runtime. Without the SDK appine still builds, and a
+# Shadertoy tab says what is missing. Install: Settings/binmac/init/vulkan-init.sh
+VULKAN_SDK ?= $(HOME)/VulkanSDK/current/macOS
+ifneq ($(wildcard $(VULKAN_SDK)/lib/libshaderc_combined.a),)
+  SHADERC_CFLAGS  = -DAPPINE_HAVE_SHADERC=1 -I"$(VULKAN_SDK)/include"
+  SHADERC_LDFLAGS = -L"$(VULKAN_SDK)/lib" -lshaderc_combined \
+                    -lspirv-cross-c -lspirv-cross-msl -lspirv-cross-hlsl -lspirv-cross-cpp \
+                    -lspirv-cross-reflect -lspirv-cross-util -lspirv-cross-glsl -lspirv-cross-core
+else
+  $(info Vulkan SDK not found at $(VULKAN_SDK): building without Shadertoy translation)
+endif
 SHADER_INCS   = $(foreach d,$(METAL_DEMOS),$(GEN_DIR)/appine_$(d)_shaders.inc)
 
 CXX = clang++
@@ -60,7 +74,8 @@ COMMON_FLAGS = -O2 -fPIC -fobjc-arc $(WARN_FLAGS) \
          -I"$(EMACS_INCLUDE_DIR)" \
          -I"$(SRC_CORE_DIR)" \
          -I"$(SRC_BACKEND_DIR)" \
-         -I"$(GEN_DIR)"
+         -I"$(GEN_DIR)" \
+         $(SHADERC_CFLAGS)
 
 CFLAGS   = $(COMMON_FLAGS) -std=c11
 # Objective-C++ (.mm): the ray tracing sample is written in it.
@@ -73,7 +88,8 @@ LDFLAGS = -dynamiclib \
           -framework UniformTypeIdentifiers \
           -framework Metal \
           -framework MetalKit \
-          -lsqlite3
+          -lsqlite3 \
+          $(SHADERC_LDFLAGS)
 
 TARGET = appine-module.dylib
 
@@ -111,12 +127,16 @@ SRCS = $(SRC_CORE_DIR)/module.c \
        $(SRC_BACKEND_DIR)/backend_quicklook.m \
        $(SRC_BACKEND_DIR)/backend_metal_triangle.m \
        $(SRC_BACKEND_DIR)/backend_metal_raytracing.mm \
+       $(SRC_BACKEND_DIR)/backend_metal_shadertoy.m \
+       $(SRC_BACKEND_DIR)/backend_vulkan_samples.m \
+       $(SRC_METAL_DIR)/shadertoy/AppineShadertoyTranslator.m \
+       $(SRC_METAL_DIR)/shadertoy/AppineShadertoyRenderer.m \
        $(SRC_METAL_DIR)/common/AppineMetalCommon.m \
        $(TRIANGLE_SRCS) \
        $(RAYTRACING_SRCS)
 
 OBJS = $(patsubst %,$(OBJ_DIR)/%.o,$(SRCS))
-HDRS = $(shell find src -name '*.h')
+HDRS = $(shell find src -name '*.h' -not -path '*/Vulkan-Samples/*')
 
 # The sample's Xcode project builds its Metal 3 configuration; the shader
 # side gets the same macro at runtime (AppineRayTracingShaders.m).
@@ -126,7 +146,24 @@ $(RAYTRACING_OBJS): EXTRA_FLAGS = -DSUPPORTS_METAL_3=1 -Wno-deprecated-declarati
 # ---------------------------------------------------------------------------
 # 构建规则
 # ---------------------------------------------------------------------------
-.PHONY: all clean
+.PHONY: all clean vulkan-samples
+.DEFAULT_GOAL := all
+
+# Khronos Vulkan-Samples (src/backends/vulkan/README.md): an optional, separate
+# library, because it is a large CMake project (about 1300 build steps). Not
+# part of `all`. Needs cmake, the Vulkan SDK, and fetch_deps.sh run once.
+VKS_DIR   = $(SRC_BACKEND_DIR)/vulkan
+VKS_BUILD = $(GEN_DIR)/vulkan-samples
+vulkan-samples:
+	@test -f $(VKS_DIR)/Vulkan-Samples/third_party/volk/volk.h || \
+	  { echo "Dependencies missing: run $(VKS_DIR)/fetch_deps.sh first."; exit 1; }
+	@test -d "$(VULKAN_SDK)" || { echo "Vulkan SDK not found at $(VULKAN_SDK)."; exit 1; }
+	VULKAN_SDK="$(VULKAN_SDK)" PATH="$(VULKAN_SDK)/bin:$$PATH" cmake $(if $(shell command -v ninja),-G Ninja,) \
+	  -S $(VKS_DIR)/Vulkan-Samples -B $(VKS_BUILD) \
+	  -DCMAKE_BUILD_TYPE=Release -DVKB_BUILD_TESTS=OFF \
+	  -DCMAKE_PROJECT_INCLUDE="$(abspath $(VKS_DIR)/appine/appine.cmake)" \
+	  -DAPPINE_VKS_OUTPUT_DIR="$(abspath .)"
+	cmake --build $(VKS_BUILD) --target appine_vulkan_samples
 
 all: $(TARGET)
 

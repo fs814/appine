@@ -55,6 +55,15 @@ extern id<AppineBackend> appine_create_quicklook_backend(NSString *path);
 extern id<AppineBackend> appine_create_rss_backend(NSString *path);
 extern id<AppineBackend> appine_create_metal_triangle_backend(void);
 extern id<AppineBackend> appine_create_metal_raytracing_backend(void);
+extern id<AppineBackend> appine_create_metal_shadertoy_backend(NSString *source);
+extern void appine_shadertoy_set_api_key(NSString *key);
+
+// A Shadertoy tab's path is this prefix plus its source (file, link or ID).
+static NSString *const kAppineShadertoyPrefix = @"appine:shadertoy:";
+
+// A Khronos Vulkan-Samples tab: this prefix plus the sample id.
+extern id<AppineBackend> appine_create_vulkan_sample_backend(NSString *sampleId);
+static NSString *const kAppineVulkanSamplePrefix = @"appine:vulkan-sample:";
 
 // Metal sample tabs open no file. Their tab path, "appine:metal-<demo>",
 // names the demo and is what the session saves and restores.
@@ -67,6 +76,10 @@ static id<AppineBackend> appine_create_metal_backend_for_path(NSString *path) {
         return appine_create_metal_triangle_backend();
     if ([path isEqualToString:appine_metal_demo_path(@"raytracing")])
         return appine_create_metal_raytracing_backend();
+    if ([path hasPrefix:kAppineShadertoyPrefix])
+        return appine_create_metal_shadertoy_backend([path substringFromIndex:kAppineShadertoyPrefix.length]);
+    if ([path hasPrefix:kAppineVulkanSamplePrefix])
+        return appine_create_vulkan_sample_backend([path substringFromIndex:kAppineVulkanSamplePrefix.length]);
     return nil;
 }
 
@@ -1536,7 +1549,10 @@ int appine_core_open_rss_in_rect(const char *path, int x, int y, int w, int h) {
 // metal sample api (demo: "triangle" or "raytracing")
 // ===========================================================================
 int appine_core_open_metal_in_rect(const char *demo, int x, int y, int w, int h) {
-    NSString *path = appine_metal_demo_path(demo ? [NSString stringWithUTF8String:demo] : @"");
+    NSString *name = demo ? [NSString stringWithUTF8String:demo] : @"";
+    // "vulkan-sample:<id>" opens a Khronos Vulkan sample; anything else is a Metal demo.
+    NSString *path = [name hasPrefix:@"vulkan-sample:"] ? [@"appine:" stringByAppendingString:name]
+                                                        : appine_metal_demo_path(name);
     dispatch_async(dispatch_get_main_queue(), ^{
         id<AppineBackend> backend = appine_create_metal_backend_for_path(path);
         if (!backend) {
@@ -1546,6 +1562,23 @@ int appine_core_open_metal_in_rect(const char *demo, int x, int y, int w, int h)
         appine_state().targetRect = NSMakeRect(x, y, w, h);
         appine_ensure_container();
         appine_add_tab(backend, path);
+        appine_restore_focus_if_active();
+    });
+    return 0;
+}
+
+// ===========================================================================
+// shadertoy api (source: file, Shadertoy link or shader ID)
+// ===========================================================================
+int appine_core_open_shadertoy_in_rect(const char *source, const char *api_key, int x, int y, int w, int h) {
+    NSString *nsSource = source ? [NSString stringWithUTF8String:source] : @"";
+    NSString *key = api_key ? [NSString stringWithUTF8String:api_key] : nil;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (key.length) appine_shadertoy_set_api_key(key);
+        NSString *path = [kAppineShadertoyPrefix stringByAppendingString:nsSource];
+        appine_state().targetRect = NSMakeRect(x, y, w, h);
+        appine_ensure_container();
+        appine_add_tab(appine_create_metal_backend_for_path(path), path);
         appine_restore_focus_if_active();
     });
     return 0;

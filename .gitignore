@@ -4,3 +4,6 @@
 /test
 .DS_Store
 /build
+# Vulkan-Samples dependencies and assets: downloaded by src/backends/vulkan/fetch_deps.sh
+/src/backends/vulkan/Vulkan-Samples/third_party/*/
+/src/backends/vulkan/Vulkan-Samples/assets/*

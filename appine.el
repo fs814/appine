@@ -730,6 +730,61 @@ noisy and converges as frames accumulate; resizing restarts it."
   (interactive)
   (appine--open-metal-demo "raytracing"))
 
+(defun appine--vulkan-samples ()
+  "List the Khronos Vulkan samples as \"category/id\" strings."
+  (let ((root (expand-file-name "src/backends/vulkan/Vulkan-Samples/samples" appine-root-dir)))
+    (unless (file-directory-p root)
+      (user-error "No Vulkan samples in %s" root))
+    (sort (mapcar (lambda (cmake)
+                    (file-relative-name (directory-file-name (file-name-directory cmake)) root))
+                  (file-expand-wildcards (expand-file-name "*/*/CMakeLists.txt" root)))
+          #'string<)))
+
+(defun appine-vulkan-sample (sample)
+  "Run a Khronos Vulkan-Samples SAMPLE in a new tab, through MoltenVK.
+SAMPLE is a sample id such as \"hello_triangle\"; interactively, pick one
+from the list.  The samples are a separate library: run
+src/backends/vulkan/fetch_deps.sh and `make vulkan-samples' in the appine
+checkout once (see src/backends/vulkan/README.md).  One sample runs at a
+time.  Samples that need Vulkan features MoltenVK lacks say so in the tab."
+  (interactive
+   (list (file-name-nondirectory
+          (completing-read "Vulkan sample: " (appine--vulkan-samples) nil t))))
+  (appine--open-metal-demo (concat "vulkan-sample:" sample)))
+
+(defcustom appine-shadertoy-api-key nil
+  "Your Shadertoy API key, for opening shaders by link or ID.
+Create one at https://www.shadertoy.com/myapps. Shadertoy's API only
+serves shaders their authors published as \"public + API\". Not needed
+for opening files."
+  :type '(choice (const :tag "None" nil) string)
+  :group 'appine)
+
+(defun appine-shadertoy (source)
+  "Translate a Shadertoy shader to Metal and run it in a new tab.
+SOURCE is a file (Shadertoy JSON, or GLSL with a mainImage function), a
+Shadertoy link such as https://www.shadertoy.com/view/XsXXDn, or a
+shader ID.  Links and IDs are fetched with `appine-shadertoy-api-key'
+and cached.  Common, Buffer A-D and Image passes are supported;
+textures, cubemaps and volumes are replaced by noise, and keyboard,
+audio and video inputs read as black.  Errors show in the tab."
+  (interactive
+   (list (read-string "Shadertoy link, ID, or file: "
+                      (let ((f (and buffer-file-name
+                                    (string-match-p "\\.\\(glsl\\|frag\\|fs\\|json\\)\\'" buffer-file-name)
+                                    buffer-file-name)))
+                        f))))
+  (let ((source (string-trim source)))
+    (when (string-empty-p source)
+      (user-error "No shader given"))
+    (when (file-exists-p (expand-file-name source))
+      (setq source (expand-file-name source)))
+    (pcase-let* ((`(,x ,y ,w ,h) (appine--rect)))
+      (appine-native-open-shadertoy-in-rect source appine-shadertoy-api-key x y w h)
+      (let ((win (appine--get-active-window-for-buffer appine--buffer-name)))
+        (when win (select-window win)))
+      (appine--set-active t))))
+
 (defun appine-close ()
   "Close all embedded native views and delete host window when possible."
   (interactive)
