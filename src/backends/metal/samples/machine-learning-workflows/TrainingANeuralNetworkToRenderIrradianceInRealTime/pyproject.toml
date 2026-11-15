@@ -1,0 +1,15 @@
+[project]
+name = "neuralrendering"
+version = "0.1.0"
+description = "Offline training script for the Neural Rendering sample"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "coremltools>=9.0",
+    "numpy>=2.4.4",
+    "opencv-python>=4.11",
+    "torch>=2.11.0",
+]
+
+[tool.uv]
+environments = ["sys_platform == 'darwin'"]

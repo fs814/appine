@@ -1,0 +1,13 @@
+appine: the texture data points into an mmap'd file, so NSData must not free() it.
+Without this, closing the sample's tab aborts Emacs (pointer being freed was not allocated).
+--- a/Renderer/Sparse Texture/AAPLStreamedTextureDataBacking.mm	
++++ b/Renderer/Sparse Texture/AAPLStreamedTextureDataBacking.mm	
+@@ -94,7 +94,7 @@
+     }
+     
+     // Holds the pointer to the mapped memory pages.
+-    _textureData = [NSData dataWithBytesNoCopy:textureDataStart length:totalLength];
++    _textureData = [NSData dataWithBytesNoCopy:textureDataStart length:totalLength freeWhenDone:NO];
+ 
+     // Process the pixel format.
+     return [self readPixelFormat];

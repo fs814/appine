@@ -6,6 +6,8 @@ Two of Apple's Metal samples, running in appine tabs inside Emacs:
 |---|---|---|
 | `M-x appine-metal-triangle` | `triangle/` | [Drawing a triangle with Metal 4](https://developer.apple.com/documentation/metal/drawing-a-triangle-with-metal-4) |
 | `M-x appine-metal-raytracing` | `raytracing/` | [Accelerating ray tracing using Metal](https://developer.apple.com/documentation/metal/accelerating-ray-tracing-using-metal) |
+| `M-x appine-metal-mlpass` | `mlpass/` | [Running a machine learning model on the GPU timeline](https://developer.apple.com/documentation/metal/running-a-machine-learning-model-on-the-gpu-timeline) |
+| `M-x appine-metal-sample` | `samples/` | All 49 samples of the [Metal sample code library](https://developer.apple.com/documentation/metal/metal-sample-code-library), by its categories; see `samples/README.md` |
 | `M-x appine-shadertoy` | `shadertoy/` | Not an Apple sample: Shadertoy shaders, translated from GLSL to Metal at runtime |
 
 Each directory holds that sample's renderer code, its license, and a README

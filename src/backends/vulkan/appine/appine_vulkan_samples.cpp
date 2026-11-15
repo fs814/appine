@@ -23,6 +23,8 @@
 // Plain C++ on purpose: Vulkan's C++ headers do not compile as Objective-C++.
 // The CAMetalLayer is an opaque pointer here, as in <vulkan/vulkan_metal.h>.
 
+#include <dlfcn.h>
+
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
@@ -140,6 +142,9 @@ void use_sdk_driver_if_unset()
 	const std::string icd = std::string(APPINE_VULKAN_SDK) + "/share/vulkan/icd.d/MoltenVK_icd.json";
 	setenv("VK_ICD_FILENAMES", icd.c_str(), 0);
 	setenv("VK_DRIVER_FILES", icd.c_str(), 0);
+	// Load the SDK's Vulkan loader up front, so the framework's own
+	// dlopen("libvulkan.dylib") resolves to this already-loaded library.
+	dlopen((std::string(APPINE_VULKAN_SDK) + "/lib/libvulkan.dylib").c_str(), RTLD_NOW | RTLD_GLOBAL);
 #endif
 }
 }        // namespace

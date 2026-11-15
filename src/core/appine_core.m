@@ -55,6 +55,7 @@ extern id<AppineBackend> appine_create_quicklook_backend(NSString *path);
 extern id<AppineBackend> appine_create_rss_backend(NSString *path);
 extern id<AppineBackend> appine_create_metal_triangle_backend(void);
 extern id<AppineBackend> appine_create_metal_raytracing_backend(void);
+extern id<AppineBackend> appine_create_metal_mlpass_backend(void);
 extern id<AppineBackend> appine_create_metal_shadertoy_backend(NSString *source);
 extern void appine_shadertoy_set_api_key(NSString *key);
 
@@ -64,6 +65,10 @@ static NSString *const kAppineShadertoyPrefix = @"appine:shadertoy:";
 // A Khronos Vulkan-Samples tab: this prefix plus the sample id.
 extern id<AppineBackend> appine_create_vulkan_sample_backend(NSString *sampleId);
 static NSString *const kAppineVulkanSamplePrefix = @"appine:vulkan-sample:";
+
+// One of Apple's Metal sample code library samples: this prefix plus its id.
+extern id<AppineBackend> appine_create_metal_sample_backend(NSString *sampleId, NSString *title);
+static NSString *const kAppineMetalSamplePrefix = @"appine:metal-sample:";
 
 // Metal sample tabs open no file. Their tab path, "appine:metal-<demo>",
 // names the demo and is what the session saves and restores.
@@ -76,8 +81,12 @@ static id<AppineBackend> appine_create_metal_backend_for_path(NSString *path) {
         return appine_create_metal_triangle_backend();
     if ([path isEqualToString:appine_metal_demo_path(@"raytracing")])
         return appine_create_metal_raytracing_backend();
+    if ([path isEqualToString:appine_metal_demo_path(@"mlpass")])
+        return appine_create_metal_mlpass_backend();
     if ([path hasPrefix:kAppineShadertoyPrefix])
         return appine_create_metal_shadertoy_backend([path substringFromIndex:kAppineShadertoyPrefix.length]);
+    if ([path hasPrefix:kAppineMetalSamplePrefix])
+        return appine_create_metal_sample_backend([path substringFromIndex:kAppineMetalSamplePrefix.length], nil);
     if ([path hasPrefix:kAppineVulkanSamplePrefix])
         return appine_create_vulkan_sample_backend([path substringFromIndex:kAppineVulkanSamplePrefix.length]);
     return nil;
@@ -1551,7 +1560,8 @@ int appine_core_open_rss_in_rect(const char *path, int x, int y, int w, int h) {
 int appine_core_open_metal_in_rect(const char *demo, int x, int y, int w, int h) {
     NSString *name = demo ? [NSString stringWithUTF8String:demo] : @"";
     // "vulkan-sample:<id>" opens a Khronos Vulkan sample; anything else is a Metal demo.
-    NSString *path = [name hasPrefix:@"vulkan-sample:"] ? [@"appine:" stringByAppendingString:name]
+    NSString *path = ([name hasPrefix:@"vulkan-sample:"] || [name hasPrefix:@"metal-sample:"])
+                         ? [@"appine:" stringByAppendingString:name]
                                                         : appine_metal_demo_path(name);
     dispatch_async(dispatch_get_main_queue(), ^{
         id<AppineBackend> backend = appine_create_metal_backend_for_path(path);

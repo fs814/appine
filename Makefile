@@ -118,6 +118,14 @@ RAYTRACING_SRCS = $(RAYTRACING_DIR)/AppineRayTracingShaders.m \
                   $(RAYTRACING_DIR)/Scene.mm \
                   $(RAYTRACING_DIR)/Transforms.mm
 
+# Apple's "Running a machine learning model on the GPU timeline" (Metal 4).
+MLPASS_DIR  = $(SRC_METAL_DIR)/mlpass
+MLPASS_SRCS = $(MLPASS_DIR)/Matrix.m \
+              $(MLPASS_DIR)/Matrix+TensorUtilities.m \
+              $(MLPASS_DIR)/MLMatrixMultiplier.m \
+              $(MLPASS_DIR)/MLMatrixMultiplier+PipelineCompilation.m \
+              $(MLPASS_DIR)/MLMatrixMultiplier+TensorSetup.m
+
 SRCS = $(SRC_CORE_DIR)/module.c \
        $(SRC_CORE_DIR)/appine_core.m \
        $(SRC_BACKEND_DIR)/backend_web.m \
@@ -127,16 +135,21 @@ SRCS = $(SRC_CORE_DIR)/module.c \
        $(SRC_BACKEND_DIR)/backend_quicklook.m \
        $(SRC_BACKEND_DIR)/backend_metal_triangle.m \
        $(SRC_BACKEND_DIR)/backend_metal_raytracing.mm \
+       $(SRC_BACKEND_DIR)/backend_metal_mlpass.m \
        $(SRC_BACKEND_DIR)/backend_metal_shadertoy.m \
        $(SRC_BACKEND_DIR)/backend_vulkan_samples.m \
+       $(SRC_BACKEND_DIR)/backend_metal_samples.m \
        $(SRC_METAL_DIR)/shadertoy/AppineShadertoyTranslator.m \
        $(SRC_METAL_DIR)/shadertoy/AppineShadertoyRenderer.m \
        $(SRC_METAL_DIR)/common/AppineMetalCommon.m \
        $(TRIANGLE_SRCS) \
-       $(RAYTRACING_SRCS)
+       $(RAYTRACING_SRCS) \
+       $(MLPASS_SRCS)
 
 OBJS = $(patsubst %,$(OBJ_DIR)/%.o,$(SRCS))
-HDRS = $(shell find src -name '*.h' -not -path '*/Vulkan-Samples/*')
+# Not the imported sample trees: the module does not compile them, and their
+# paths can contain spaces, which make would split (and then skip every rule).
+HDRS = $(shell find src -name '*.h' -not -path '*/Vulkan-Samples/*' -not -path '*/metal/samples/*')
 
 # The sample's Xcode project builds its Metal 3 configuration; the shader
 # side gets the same macro at runtime (AppineRayTracingShaders.m).
@@ -146,7 +159,7 @@ $(RAYTRACING_OBJS): EXTRA_FLAGS = -DSUPPORTS_METAL_3=1 -Wno-deprecated-declarati
 # ---------------------------------------------------------------------------
 # 构建规则
 # ---------------------------------------------------------------------------
-.PHONY: all clean vulkan-samples
+.PHONY: all clean vulkan-samples metal-samples
 .DEFAULT_GOAL := all
 
 # Khronos Vulkan-Samples (src/backends/vulkan/README.md): an optional, separate
@@ -154,16 +167,32 @@ $(RAYTRACING_OBJS): EXTRA_FLAGS = -DSUPPORTS_METAL_3=1 -Wno-deprecated-declarati
 # part of `all`. Needs cmake, the Vulkan SDK, and fetch_deps.sh run once.
 VKS_DIR   = $(SRC_BACKEND_DIR)/vulkan
 VKS_BUILD = $(GEN_DIR)/vulkan-samples
+# Apple's Metal sample code library (src/backends/metal/samples/README.md):
+# each sample's own Xcode project built as a bundle in build/metal-samples.
+# Not part of `all`. Restores the large asset files first (about 2.1 GB,
+# downloaded once from developer.apple.com). SAMPLES=id... builds only those.
+metal-samples:
+	python3 -I $(SRC_METAL_DIR)/samples/tools/fetch_samples.py $(SAMPLES)
+	python3 -I $(SRC_METAL_DIR)/samples/tools/build_all.py $(GEN_DIR)/metal-samples $(SAMPLES)
+
 vulkan-samples:
 	@test -f $(VKS_DIR)/Vulkan-Samples/third_party/volk/volk.h || \
 	  { echo "Dependencies missing: run $(VKS_DIR)/fetch_deps.sh first."; exit 1; }
 	@test -d "$(VULKAN_SDK)" || { echo "Vulkan SDK not found at $(VULKAN_SDK)."; exit 1; }
-	VULKAN_SDK="$(VULKAN_SDK)" PATH="$(VULKAN_SDK)/bin:$$PATH" cmake $(if $(shell command -v ninja),-G Ninja,) \
+	@# This Makefile's compiler and linker flags must not reach CMake: make
+	@# exports them when the shell already has CFLAGS/LDFLAGS set, and the
+	@# SDK's SPIRV-Cross would then be linked beside Vulkan-Samples' own copy,
+	@# a different version, which corrupts the heap. Hence env -u and the
+	@# explicit empty CMAKE_*_FLAGS (which also repair an older build folder).
+	env -u CFLAGS -u CXXFLAGS -u LDFLAGS -u CPPFLAGS \
+	  VULKAN_SDK="$(VULKAN_SDK)" PATH="$(VULKAN_SDK)/bin:$$PATH" cmake $(if $(shell command -v ninja),-G Ninja,) \
 	  -S $(VKS_DIR)/Vulkan-Samples -B $(VKS_BUILD) \
 	  -DCMAKE_BUILD_TYPE=Release -DVKB_BUILD_TESTS=OFF \
+	  -DCMAKE_C_FLAGS= -DCMAKE_CXX_FLAGS= \
+	  -DCMAKE_SHARED_LINKER_FLAGS= -DCMAKE_EXE_LINKER_FLAGS= -DCMAKE_MODULE_LINKER_FLAGS= \
 	  -DCMAKE_PROJECT_INCLUDE="$(abspath $(VKS_DIR)/appine/appine.cmake)" \
 	  -DAPPINE_VKS_OUTPUT_DIR="$(abspath .)"
-	cmake --build $(VKS_BUILD) --target appine_vulkan_samples
+	env -u CFLAGS -u CXXFLAGS -u LDFLAGS -u CPPFLAGS cmake --build $(VKS_BUILD) --target appine_vulkan_samples
 
 all: $(TARGET)
 

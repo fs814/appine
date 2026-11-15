@@ -55,6 +55,8 @@
 
 
 (require 'url)
+(require 'json)
+(require 'seq)
 
 (defconst appine-github-repo "chaoswork/appine")
 (defconst appine-version "0.1.0") ;; 记得打 tag 以使用 github action
@@ -729,6 +731,130 @@ Metal 3 support; otherwise the tab says why it cannot run. The image starts
 noisy and converges as frames accumulate; resizing restarts it."
   (interactive)
   (appine--open-metal-demo "raytracing"))
+
+(defun appine-metal-mlpass ()
+  "Multiply matrices with a Metal 4 machine learning pass in a new tab.
+This is Apple's \"Running a machine learning model on the GPU timeline\"
+sample (see src/backends/metal/mlpass/): it runs a small Core ML model,
+converted to a Metal package, on the GPU timeline and checks the product
+against the CPU.  The tab shows both products and lets you run again with
+new random matrices.  Needs Metal 4 (Apple silicon, macOS 26 or later)."
+  (interactive)
+  (appine--open-metal-demo "mlpass"))
+
+;;; Apple's Metal sample code library
+
+(defconst appine--metal-samples-dir "src/backends/metal/samples"
+  "Where the Metal sample code library lives in the appine checkout.")
+
+(defun appine--metal-samples-catalog ()
+  "The library's categories, in the web page's order, as parsed JSON.
+Each category is an alist with `title' and `samples'; each sample has
+`id', `title', `abstract', `path' and `doc'."
+  (let ((file (expand-file-name "catalog.json"
+                                (expand-file-name appine--metal-samples-dir appine-root-dir))))
+    (unless (file-exists-p file)
+      (user-error "No Metal sample catalog at %s" file))
+    (alist-get 'categories (json-read-file file))))
+
+(defun appine--metal-samples-status ()
+  "Build status per sample id: \"ok\", or why it did not build; nil if never built."
+  (let ((file (expand-file-name "build/metal-samples/status.json" appine-root-dir)))
+    (and (file-exists-p file)
+         (let ((json-key-type 'string)) (json-read-file file)))))
+
+(defun appine--metal-sample-state (id status)
+  "A short state for sample ID from STATUS: ready, unavailable or not built."
+  (let ((s (cdr (assoc id status))))
+    (cond ((equal s "ok") "ready")
+          ((null s) "not built")
+          ((string-match-p "no \\.xcodeproj" s) "no app")
+          (t "build failed"))))
+
+(defun appine--metal-sample-candidates ()
+  "Completion candidates \"Title\" -> (id category abstract state doc path)."
+  (let ((status (appine--metal-samples-status)) out)
+    (seq-doseq (cat (appine--metal-samples-catalog))
+      (seq-doseq (s (alist-get 'samples cat))
+        (push (cons (alist-get 'title s)
+                    (list (alist-get 'id s) (alist-get 'title cat) (alist-get 'abstract s)
+                          (appine--metal-sample-state (alist-get 'id s) status)
+                          (alist-get 'doc s) (alist-get 'path s)))
+              out)))
+    (nreverse out)))
+
+(defun appine-metal-sample (title)
+  "Run one of Apple's Metal sample code library samples in a new tab.
+TITLE is the sample's title on developer.apple.com; interactively, pick it
+from the library, grouped by the web page's categories.  Each sample runs
+from its own Xcode project, built as a bundle (see
+src/backends/metal/samples/README.md): its view, controls and shaders
+appear in the tab.  Command-line samples show what they print.  Samples
+with no app to show (Python and USD workflows) open their README instead."
+  (interactive
+   (let* ((cands (appine--metal-sample-candidates))
+          (completion-extra-properties
+           `(:annotation-function
+             ,(lambda (c)
+                (pcase-let ((`(,_ ,_ ,abstract ,state . ,_) (cdr (assoc c cands))))
+                  (concat (propertize (format "  [%s]  " state) 'face
+                                      (if (equal state "ready") 'success 'shadow))
+                          (propertize (or abstract "") 'face 'completions-annotations))))
+             :group-function
+             ,(lambda (c transform)
+                (if transform c (nth 1 (cdr (assoc c cands))))))))
+     (list (completing-read "Metal sample: "
+                            (lambda (str pred action)
+                              (if (eq action 'metadata)
+                                  `(metadata (display-sort-function . identity)
+                                             (cycle-sort-function . identity)
+                                             (annotation-function . ,(plist-get completion-extra-properties :annotation-function))
+                                             (group-function . ,(plist-get completion-extra-properties :group-function)))
+                                (complete-with-action action cands str pred)))
+                            nil t))))
+  (pcase-let* ((`(,id ,_ ,_ ,state ,doc ,path) (cdr (assoc title (appine--metal-sample-candidates)))))
+    (unless id (user-error "No Metal sample titled %s" title))
+    (if (member state '("ready" "build failed" "not built"))
+        (appine--open-metal-demo (concat "metal-sample:" id))
+      ;; Nothing to run inside Emacs: show the sample's own README.
+      (let ((readme (expand-file-name "README.md" (expand-file-name path (expand-file-name appine--metal-samples-dir appine-root-dir)))))
+        (if (file-exists-p readme) (find-file-other-window readme) (browse-url doc))
+        (message "%s has no app to run in appine (%s); its page: %s" title state doc)))))
+
+(defun appine-metal-samples ()
+  "List Apple's Metal sample code library by the web page's categories.
+RET on a sample runs it (`appine-metal-sample'); `d' opens its page on
+developer.apple.com; `g' refreshes the build states."
+  (interactive)
+  (let ((buf (get-buffer-create "*Metal Samples*"))
+        (status (appine--metal-samples-status)))
+    (with-current-buffer buf
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert (propertize "Metal sample code library" 'face 'bold) "\n"
+                (propertize "developer.apple.com/documentation/metal/metal-sample-code-library" 'face 'shadow)
+                "\n\n")
+        (seq-doseq (cat (appine--metal-samples-catalog))
+          (insert (propertize (alist-get 'title cat) 'face 'font-lock-keyword-face) "\n")
+          (seq-doseq (s (alist-get 'samples cat))
+            (let ((state (appine--metal-sample-state (alist-get 'id s) status))
+                  (title (alist-get 'title s)) (doc (alist-get 'doc s)))
+              (insert "  ")
+              (insert-text-button title 'action (lambda (_) (appine-metal-sample title))
+                                  'appine-doc doc 'follow-link t
+                                  'help-echo (alist-get 'abstract s))
+              (insert (propertize (format "  [%s]" state) 'face (if (equal state "ready") 'success 'shadow))
+                      "\n    " (propertize (alist-get 'abstract s) 'face 'shadow) "\n")))
+          (insert "\n")))
+      (goto-char (point-min))
+      (special-mode)
+      (local-set-key (kbd "d") (lambda () (interactive)
+                                 (let ((doc (get-char-property (point) 'appine-doc)))
+                                   (if doc (browse-url doc) (user-error "No sample here")))))
+      (local-set-key (kbd "g") #'appine-metal-samples)
+      (local-set-key (kbd "TAB") #'forward-button)
+      (local-set-key (kbd "<backtab>") #'backward-button))
+    (pop-to-buffer buf)))
 
 (defun appine--vulkan-samples ()
   "List the Khronos Vulkan samples as \"category/id\" strings."
